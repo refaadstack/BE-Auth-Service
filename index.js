@@ -11,6 +11,11 @@ const app = express();
 // Middleware
 app.use(cors({ credentials: true, origin: process.env.CORS_ORIGIN || 'http://localhost:5173' }));
 app.use(express.json());
+// Health check (Docker/K8s)
+app.get('/health', (req, res) => {
+  res.status(200).json({ success: true, timestamp: new Date().toISOString() });
+});
+
 
 // Routes
 app.use('/api/auth', authRoutes);
