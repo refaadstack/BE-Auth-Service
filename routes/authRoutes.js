@@ -8,7 +8,7 @@ import {
   updateUser, 
   deleteUser, 
   changePassword, 
-  getUserStats 
+  getUserStats, verifyToken 
 } from '../controllers/AuthController.js';
 import { authenticateToken } from '../middleware/authMiddleware.js';
 
@@ -17,6 +17,7 @@ const router = express.Router();
 // Public routes
 router.post('/register', register);
 router.post('/login', login);
+router.post('/verify-token', verifyToken);
 
 // Protected routes (requires authentication)
 router.get('/user', authenticateToken, getUser);

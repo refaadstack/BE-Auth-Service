@@ -289,3 +289,24 @@ export const getUserStats = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+// Verify token (for inter-service authentication, e.g. BOQ service)
+export const verifyToken = async (req, res) => {
+  const { token } = req.body;
+  if (!token) {
+    return res.status(400).json({ valid: false, message: 'Token diperlukan' });
+  }
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET_KEY);
+    return res.json({
+      valid: true,
+      user: {
+        id: decoded.userId,
+        email: decoded.email,
+        name: decoded.name,
+        roles: decoded.roles,
+      },
+    });
+  } catch (error) {
+    return res.json({ valid: false, message: 'Token tidak valid' });
+  }
+};
