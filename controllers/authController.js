@@ -2,6 +2,12 @@ import Users from '../models/User.js';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 
+// Lazy import agar unit test yang mem-mock models/User.js tidak ikut memuat rbac.
+const loadPermissions = async (userId, legacyRoles) => {
+  const { getUserPermissions } = await import('../models/rbac.js');
+  return getUserPermissions(userId, legacyRoles);
+};
+
 // Register
 export const register = async (req, res) => {
   const { name, email, password } = req.body;
@@ -20,6 +26,13 @@ export const register = async (req, res) => {
       password: hashedPassword,
       roles: 'user'
     });
+    try {
+      const { Role, UserRole } = await import('../models/rbac.js');
+      const userRole = await Role.findOne({ where: { name: 'user' } });
+      if (userRole) await UserRole.findOrCreate({ where: { user_id: newUser.id, role_id: userRole.id } });
+    } catch {
+      // RBAC belum siap: user tetap dibuat dengan peran legacy 'user'
+    }
 
     res.status(201).json({ 
       message: 'User berhasil dibuat!',
@@ -51,24 +64,27 @@ export const login = async (req, res) => {
       return res.status(401).json({ message: 'Password salah' });
     }
 
+    const permissions = await loadPermissions(user.id, user.roles);
     const token = jwt.sign(
-      { 
-        userId: user.id, 
-        email: user.email, 
+      {
+        userId: user.id,
+        email: user.email,
         name: user.name,
-        roles: user.roles 
+        roles: user.roles,
+        permissions
       },
       process.env.JWT_SECRET_KEY,
       { expiresIn: '1h' }
     );
 
-    res.json({ 
+    res.json({
       token,
       user: {
         id: user.id,
         name: user.name,
         email: user.email,
-        roles: user.roles
+        roles: user.roles,
+        permissions
       }
     });
   } catch (error) {
@@ -96,13 +112,6 @@ export const getUser = async (req, res) => {
 // Get all users (Admin only)
 export const getAllUsers = async (req, res) => {
   try {
-    // Check if user is admin
-    if (req.user.roles !== 'admin') {
-      return res.status(403).json({ 
-        message: 'Akses ditolak. Hanya admin yang dapat mengakses data ini.' 
-      });
-    }
-
     const users = await Users.findAll({
       attributes: { exclude: ['password'] }, // Don't return passwords
       order: [['createdAt', 'DESC']] // Sort by newest first
@@ -117,13 +126,6 @@ export const getAllUsers = async (req, res) => {
 // Get user by ID (Admin only)
 export const getUserById = async (req, res) => {
   try {
-    // Check if user is admin
-    if (req.user.roles !== 'admin') {
-      return res.status(403).json({ 
-        message: 'Akses ditolak. Hanya admin yang dapat mengakses data ini.' 
-      });
-    }
-
     const { id } = req.params;
     const user = await Users.findByPk(id, {
       attributes: { exclude: ['password'] }
@@ -190,13 +192,6 @@ export const updateUser = async (req, res) => {
 // Delete user (Admin only)
 export const deleteUser = async (req, res) => {
   try {
-    // Check if user is admin
-    if (req.user.roles !== 'admin') {
-      return res.status(403).json({ 
-        message: 'Akses ditolak. Hanya admin yang dapat menghapus user.' 
-      });
-    }
-
     const { id } = req.params;
     
     // Prevent admin from deleting themselves
@@ -265,13 +260,6 @@ export const changePassword = async (req, res) => {
 // Get user statistics (Admin only)
 export const getUserStats = async (req, res) => {
   try {
-    // Check if user is admin
-    if (req.user.roles !== 'admin') {
-      return res.status(403).json({ 
-        message: 'Akses ditolak. Hanya admin yang dapat mengakses statistik.' 
-      });
-    }
-
     const totalUsers = await Users.count();
     const adminUsers = await Users.count({ where: { roles: 'admin' } });
     const regularUsers = await Users.count({ where: { roles: 'user' } });
@@ -297,6 +285,23 @@ export const verifyToken = async (req, res) => {
   }
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET_KEY, { algorithms: ['HS256'] });
+    try {
+      const fresh = await Users.findByPk(decoded.userId, { attributes: ['id', 'roles'] });
+      if (!fresh) return res.json({ valid: false, message: 'User tidak ditemukan' });
+      const permissions = await loadPermissions(fresh.id, fresh.roles);
+      return res.json({
+        valid: true,
+        user: {
+          id: fresh.id,
+          email: decoded.email,
+          name: decoded.name,
+          roles: fresh.roles,
+          permissions,
+        },
+      });
+    } catch {
+      // DB tidak terjangkau: pakai klaim token apa adanya
+    }
     return res.json({
       valid: true,
       user: {
@@ -304,6 +309,7 @@ export const verifyToken = async (req, res) => {
         email: decoded.email,
         name: decoded.name,
         roles: decoded.roles,
+        permissions: Array.isArray(decoded.permissions) ? decoded.permissions : null,
       },
     });
   } catch (error) {

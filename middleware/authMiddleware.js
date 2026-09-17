@@ -31,6 +31,19 @@ export const authenticateToken = (req, res, next) => {
   }
 };
 
+// Izin berbasis peran. Lolos bila: legacy admin, klaim '*' , atau pegang semua key.
+// Dipakai untuk endpoint baru; endpoint lama tetap memakai requireAdmin agar kompatibel.
+export const requirePermission = (...keys) => (req, res, next) => {
+  const granted = req.user?.permissions;
+  if (req.user?.roles === 'admin') return next();
+  if (Array.isArray(granted) && (granted.includes('*') || keys.every((k) => granted.includes(k)))) {
+    return next();
+  }
+  return res.status(403).json({
+    message: 'Akses ditolak. Butuh izin: ' + keys.join(', ') + '.',
+  });
+};
+
 // Middleware to check if user is admin
 export const requireAdmin = (req, res, next) => {
   if (req.user.roles !== 'admin') {

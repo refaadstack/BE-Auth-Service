@@ -3,6 +3,8 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from './routes/authRoutes.js';
 import sequelize from './config/db.js';
+import './models/User.js';
+import { seedRbac } from './models/rbac.js';
 
 dotenv.config();
 
@@ -23,7 +25,11 @@ app.use('/api/auth', authRoutes);
 // Database connection
 sequelize
   .sync()
-  .then(() => console.log('✅ MySQL connected and models synced'))
+  .then(async () => {
+    console.log('✅ MySQL connected and models synced');
+    await seedRbac();
+    console.log('✅ RBAC seeded');
+  })
   .catch((err) => console.error('❌ MySQL connection error:', err));
 
 // Start server
