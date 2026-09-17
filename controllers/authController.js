@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 
 // Register
 export const register = async (req, res) => {
-  const { name, email, password, roles } = req.body;
+  const { name, email, password } = req.body;
 
   try {
     // Check if user already exists
@@ -14,11 +14,11 @@ export const register = async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = await Users.create({ 
-      name, 
-      email, 
-      password: hashedPassword, 
-      roles: roles || 'user' // Default role is 'user'
+    const newUser = await Users.create({
+      name,
+      email,
+      password: hashedPassword,
+      roles: 'user'
     });
 
     res.status(201).json({ 
@@ -292,11 +292,11 @@ export const getUserStats = async (req, res) => {
 // Verify token (for inter-service authentication, e.g. BOQ service)
 export const verifyToken = async (req, res) => {
   const { token } = req.body;
-  if (!token) {
+  if (typeof token !== 'string' || !token) {
     return res.status(400).json({ valid: false, message: 'Token diperlukan' });
   }
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET_KEY);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET_KEY, { algorithms: ['HS256'] });
     return res.json({
       valid: true,
       user: {

@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "test": "node --experimental-test-module-mocks --test tests/*.test.js"
   },
   "keywords": [],
   "author": "",
